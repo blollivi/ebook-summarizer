@@ -1,0 +1,8 @@
+umap_params:
+  n_neighbors: 10
+  n_components: 2
+  metric: cosine
+  min_dist: 0.1
+
+pca_config:
+  explained_variance_ratio: 0.9
