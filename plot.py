@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from bokeh.plotting import figure, show, output_file
 from bokeh.models import (
     ColumnDataSource,
@@ -13,11 +14,18 @@ from bokeh.palettes import Viridis256, Turbo256, TolRainbow19
 from bokeh.layouts import column, row
 
 
-def create_hover_plot(x, y, texts, values, sizes):
+
+def create_hover_plot(umap_projection: pd.DataFrame, chunks_df: pd.DataFrame):
+    x = umap_projection.iloc[:, 0].values
+    y = umap_projection.iloc[:, 1].values
+    texts = chunks_df["text"].values
+    values = np.arange(len(x))
+    sizes = chunks_df["Length"].values
+    
     # Create a colormap
     mapper = linear_cmap(
         field_name="values",
-        palette=TolRainbow19,
+        palette=Turbo256,
         low=np.min(values),
         high=np.max(values),
     )
@@ -40,6 +48,8 @@ def create_hover_plot(x, y, texts, values, sizes):
         radius="sizes",
         alpha=0.9,
         hover_alpha=1.0,
+        line_color="white",  # Add white marker border
+        line_width=1,  # Set the width of the marker border
         source=source,
     )
 
