@@ -1,8 +1,12 @@
-umap_params:
+umap:
   n_neighbors: 10
   n_components: 2
   metric: cosine
   min_dist: 0.1
+  densmap: False
 
-pca_config:
-  explained_variance_ratio: 0.9
+pca:
+  explained_variance_ratio: 0.95
+
+embedding_model_name: voyage-multilingual-2
+voyageai_api_key: pa-BmV1zH3ciXxLz7SAekEoJjBAHLyFosQ6yAt24olb9fM

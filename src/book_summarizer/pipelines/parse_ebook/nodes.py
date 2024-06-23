@@ -1,5 +1,4 @@
 from typing import List
-from collections import defaultdict
 from bs4 import BeautifulSoup
 import pandas as pd
 

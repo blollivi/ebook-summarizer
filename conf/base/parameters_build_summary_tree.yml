@@ -1,0 +1,6 @@
+change_point_detection:
+  penalty_params:
+    start: 1
+    end: 75
+    step: 1
+  denoise: True

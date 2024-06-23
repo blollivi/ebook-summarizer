@@ -5,15 +5,7 @@ import numpy as np
 from sklearn.decomposition import PCA
 
 
-from book_summarizer.tools import ChangePointDetectionGraph
-import networkx as nx
-# import umap
-# from hdbscan import HDBSCAN
-
-
-def make_api_call(
-    chunks_df: pd.DataFrame, api_key: str, model_name: str
-) -> list:
+def make_api_call(chunks_df: pd.DataFrame, api_key: str, model_name: str) -> list:
     """
     Compute embeddings for the chunks of text using the Voyage AI API.
 
@@ -52,17 +44,11 @@ def compute_pca_projection(
 
     pc = PCA(n_components=n_components).fit_transform(embeddings)
 
-    return pc
-
-
-def compute_change_points_graph(pca_projection: np.array) -> nx.DiGraph:
-    detector = ChangePointDetectionGraph().fit(pca_projection)
-    detector.compute_graph()
-    return detector
+    return pd.DataFrame(pc, index=embeddings.index)
 
 
 def compute_umap_projection(
-    chunks_df: pd.DataFrame,
+    pca_projection: pd.DataFrame,
     umap_config: Dict[str, Any] = dict(
         n_neighbors=15, n_components=2, metric="cosine", min_dist=0.1
     ),
@@ -80,14 +66,10 @@ def compute_umap_projection(
     pd.DataFrame
         Dataframe containing the UMAP projection.
     """
-    from hdbscan import HDBSCAN
     from umap import UMAP
 
-    pc = np.array(chunks_df["pca_projection"].to_list())
+    pc = pca_projection.to_numpy()
 
     umap_projection = UMAP(**umap_config).fit_transform(pc)
-    chunks_df["cluster"] = HDBSCAN(min_cluster_size=2).fit_predict(umap_projection)
 
-    chunks_df["umap_projection"] = list(umap_projection)
-
-    return chunks_df
+    return pd.DataFrame(umap_projection, index=pca_projection.index)

@@ -13,6 +13,14 @@ embeddings:
   type: pandas.ParquetDataset
   filepath: data/02_intermediate/embeddings.parquet
 
-change_points_graph:
+pca_projection:
+  type: pandas.ParquetDataset
+  filepath: data/02_intermediate/pca_projection.parquet
+
+umap_projection:
+  type: pandas.ParquetDataset
+  filepath: data/02_intermediate/umap_projection.parquet
+
+summary_tree:
   type: pickle.PickleDataset
-  filepath: data/02_intermediate/change_points_graph.pkl
+  filepath: data/02_intermediate/summary_tree.pkl
