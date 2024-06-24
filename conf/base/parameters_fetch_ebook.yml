@@ -1,0 +1,8 @@
+libgen_scrapper:
+  base_url: "http://libgen.gs"
+  levenshtein_thd: 5
+  columns_idx:
+    title: 0
+    author: 1
+    size: 6
+    mirrors: 8
