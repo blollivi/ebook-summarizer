@@ -12,8 +12,8 @@ class Summarizer:
     ):
         self.summary_tree = summary_tree
         self.llm_engine = llm_engine
-        self.summary_path = summary_tree.get_summary_path()
-        self.outline_path = summary_tree.get_outline_path()
+        self.summary_path = summary_tree.summary_path
+        self.outline_path = summary_tree.outline_path
         self.chunks_df = chunks_df
         self.progress = []  # List of nodes that have been summarized
         self.is_error = False
@@ -27,25 +27,17 @@ class Summarizer:
             self.build_tree_outline(child, level + 1, outline)
 
     def build_context_path(self, current_node):
-        outline_path = list(self.outline_path)
-        current_node_idx = outline_path.index(current_node)
-        outline_path = outline_path[:current_node_idx]
-
-        book_coverage = 0
-        context_path = []
-        for node_id in outline_path:
-            if "short_summary" in self.summary_tree.graph.nodes[node_id]:
-                if node_id[1] > book_coverage:
-                    context_path.append(node_id)
-                    book_coverage = node_id[1]
-        return context_path
+        current_node_penalty = self.summary_tree.graph.nodes[current_node]["pen"]
+        context_nodes = self.summary_tree.get_penalty_level_cut(current_node_penalty)
+        current_node_idx = context_nodes.index(current_node)
+        return context_nodes[:current_node_idx]
 
     def build_context_prompt(self, current_node):
         context_path = self.build_context_path(current_node)
 
         return "\n".join(
             [
-                self.summary_tree.graph.nodes[node_id]["long_summary"]
+                self.summary_tree.graph.nodes[node_id]["summary"]
                 for node_id in context_path
             ]
         )
@@ -61,7 +53,7 @@ class Summarizer:
 
         else:
             chunks = [
-                self.summary_tree.graph.nodes[node_id]["long_summary"]
+                self.summary_tree.graph.nodes[node_id]["summary"]
                 for node_id in child_nodes
             ]
 
@@ -70,9 +62,11 @@ class Summarizer:
         print(
             f"Summarizing node {node_id} from {child_nodes} with context {context_path}"
         )
-
+        chunk = "\n".join(chunks)
         try:
-            return self.llm_engine.generate_response(dict(chunk=chunks, context=context, language="French"))
+            return self.llm_engine.generate_response(
+                dict(chunk=chunk, context=context, language="French")
+            )
         except Exception as e:
             print(f"Error summarizing node {node_id}: {e}")
             return None
@@ -83,7 +77,7 @@ class Summarizer:
 
         for i in range(head_idx):
             node = self.summary_path[i]
-            if "long_summary" in self.summary_tree.graph.nodes[node]:
+            if "summary" in self.summary_tree.graph.nodes[node]:
                 continue
             node_summary = self.summarize_node(node)
             if node_summary is None:
@@ -94,8 +88,7 @@ class Summarizer:
                 self.summary_tree.graph,
                 {
                     node: {
-                        "long_summary": node_summary["long"],
-                        "short_summary": node_summary["short"],
+                        "summary": node_summary["summary"],
                         "title": node_summary["title"],
                     }
                 },

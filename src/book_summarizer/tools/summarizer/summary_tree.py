@@ -73,7 +73,8 @@ class SummaryTree:
         end = self.graph.nodes[parent]["pen"]
         return start, end
 
-    def get_summary_path(self):
+    @property
+    def summary_path(self):
         summary_path = []
         for head in self.heads:
             summary_path += list(
@@ -85,13 +86,8 @@ class SummaryTree:
             )
         return summary_path
 
-    def compute_node_level(self):
-        for head in self.heads:
-            shortest_path = nx.shortest_path(self.graph, source=head)
-            node_levels = {node: len(shortest_path[node]) - 1 for node in shortest_path}
-            nx.set_node_attributes(self.graph, node_levels, "level")
-
-    def get_outline_path(self):
+    @property
+    def outline_path(self):
         outline_path = []
         for head in self.heads:
             outline_path += list(
@@ -103,13 +99,28 @@ class SummaryTree:
             )
         return outline_path
 
+    def get_penalty_level_cut(self, penalty_level):
+        summary_path = self.summary_path
+        penalty_ranges = [self.get_node_penalty_range(node) for node in summary_path]
+        return [
+            node
+            for node, (min_penalty, max_penalty) in zip(summary_path, penalty_ranges)
+            if min_penalty <= penalty_level < max_penalty
+        ]
+
+    def compute_node_level(self):
+        for head in self.heads:
+            shortest_path = nx.shortest_path(self.graph, source=head)
+            node_levels = {node: len(shortest_path[node]) - 1 for node in shortest_path}
+            nx.set_node_attributes(self.graph, node_levels, "level")
+
     def _find_change_points(self, signal: np.array) -> None:
         bkps = []
         centered_signal = signal
         for pen in self.penalties:
             cost = rpt.costs.CostCosine()
-            # model = rpt.Binseg(model="cosine").fit(centered_signal)
-            model = rpt.KernelCPD(kernel="cosine", min_size=3).fit(centered_signal)
+            model = rpt.Binseg(model="cosine").fit(centered_signal)
+            # model = rpt.KernelCPD(kernel="cosine", min_size=3).fit(centered_signal)
             bkps.append(model.predict(pen=pen))
 
             if self.denoise:
