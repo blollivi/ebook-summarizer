@@ -3,9 +3,18 @@ from langchain_voyageai import VoyageAIEmbeddings
 import pandas as pd
 import numpy as np
 from sklearn.decomposition import PCA
+from pathlib import Path
+
+from kedro.config import OmegaConfigLoader
+from kedro.framework.project import settings
+
+project_root = Path(__file__).resolve().parents[4]
+conf_path = str(Path(project_root) / settings.CONF_SOURCE)
+conf_loader = OmegaConfigLoader(conf_source=conf_path)
+credentials = conf_loader["credentials"]
 
 
-def make_api_call(chunks_df: pd.DataFrame, api_key: str, model_name: str) -> list:
+def make_api_call(chunks_df: pd.DataFrame, model_name: str) -> list:
     """
     Compute embeddings for the chunks of text using the Voyage AI API.
 
@@ -21,7 +30,7 @@ def make_api_call(chunks_df: pd.DataFrame, api_key: str, model_name: str) -> lis
     pd.DataFrame
         Dataframe containing the computed embeddings.
     """
-
+    api_key = credentials["voyage_api_key"]
     model = VoyageAIEmbeddings(voyage_api_key=api_key, model=model_name, batch_size=128)
     documents = chunks_df["text"].to_list()
 

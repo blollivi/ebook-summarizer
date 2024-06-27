@@ -16,7 +16,7 @@ def create_pipeline(**kwargs) -> Pipeline:
     return pipeline([
         node(
             func=make_api_call,
-            inputs=["chunks", "params:voyageai_api_key", "params:embedding_model_name"],
+            inputs=["chunks", "params:embedding_model_name"],
             outputs="embeddings",
             name="make_api_call",
         ),
