@@ -1,3 +1,5 @@
+
+
 ## Book Summarizer: Introduction
 
 The Book Summarizer project aims to provide concise and insightful summaries of books using the power of Large Language Models (LLM) and change point detection algorithms.  This project goes beyond simple text summarization by identifying key segments within the book and leveraging the context of previous sections to generate a hierarchical summary that reflects the book's structure and main arguments.
@@ -10,6 +12,12 @@ Key features of this project include:
 * **Hierarchical Summarization:** Leverages the power of Google's Gemini LLM to generate summaries for each identified segment, taking into account the context of previously summarized sections to ensure coherence and flow.
 
 Built using the Kedro pipeline framework, the Book Summarizer project offers a modular and scalable approach to book summarization, allowing for customization and extension to incorporate different LLMs, embedding models, and summarization strategies.
+
+#### Spoiler: Example of tree structure representation of a book
+
+![Summary Tree](images/summary_tree.png)
+To knoz how this tree is built, please refer to the pipeline details section: [Pipeline Details and Data Flow](#pipeline-details-and-data-flow)
+
 
 ## Getting Started
 
