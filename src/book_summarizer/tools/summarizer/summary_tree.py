@@ -6,6 +6,15 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 
 def get_segments_from_breakpoints(bkpts: np.array):
+    """
+    Convert a list of breakpoints into a list of segments.
+
+    Args:
+        bkpts (np.array): An array of breakpoint indices.
+
+    Returns:
+        list: A list of tuples, where each tuple represents a segment defined by its start and end indices.
+    """
     segments = [(0, bkpts[0] - 1)]
     for i in range(1, len(bkpts)):
         segments.append((int(bkpts[i - 1]), int(bkpts[i] - 1)))
@@ -13,12 +22,33 @@ def get_segments_from_breakpoints(bkpts: np.array):
 
 
 def medoid(arr: np.array):
+    """
+    Calculate the medoid of a set of vectors.
+
+    The medoid is the point in the set with the smallest average distance to all other points.
+
+    Args:
+        arr (np.array): A 2D array of vectors.
+
+    Returns:
+        np.array: The medoid vector.
+    """
     dist_matrix = cosine_similarity(arr)
     idx_medoid = np.argmin(np.sum(dist_matrix, axis=1))
     return arr[idx_medoid]
 
 
 def compute_centered_signal(signal: np.array, bkpts: np.array):
+    """
+    Center a signal based on the medoid of each segment defined by the breakpoints.
+
+    Args:
+        signal (np.array): The input signal.
+        bkpts (np.array): An array of breakpoint indices.
+
+    Returns:
+        np.array: The centered signal.
+    """
     segments = get_segments_from_breakpoints(bkpts)
     centered_signal = np.zeros_like(signal)
 
@@ -30,21 +60,53 @@ def compute_centered_signal(signal: np.array, bkpts: np.array):
 
 
 class SummaryTree:
+    """
+    A class to represent the hierarchical structure of a text using change point detection.
+
+    This class uses a change point detection algorithm to identify segments in a signal
+    (e.g., embeddings of text chunks) and builds a tree structure where each node represents
+    a segment and the edges represent the hierarchical relationships between segments.
+    """
 
     def __init__(
         self, penalties: np.array = np.arange(2, 50, 0.25), denoise: bool = True
     ):
+        """
+        Initialize the SummaryTree.
+
+        Args:
+            penalties (np.array, optional): An array of penalty values to use for change point detection.
+                Defaults to np.arange(2, 50, 0.25).
+            denoise (bool, optional): Whether to denoise the signal before change point detection.
+                Defaults to True.
+        """
         self.penalties = penalties
         self.denoise = denoise
 
     def fit(self, signal: np.array):
+        """
+        Fit the SummaryTree to the given signal.
+
+        Args:
+            signal (np.array): The input signal (e.g., embeddings of text chunks).
+
+        Returns:
+            SummaryTree: The fitted SummaryTree object.
+        """
         self._find_change_points(signal)
         self.graph = self._build_tree()
         return self
 
     @property
     def heads(self):
-        """Heads have zero node pointing to them."""
+        """
+        Get the heads of the summary tree.
+
+        Heads are nodes with no incoming edges, representing the top-level segments of the text.
+
+        Returns:
+            list: A list of head node IDs.
+        """
         heads = [
             node_id
             for node_id in self.graph.nodes
@@ -55,13 +117,32 @@ class SummaryTree:
         return heads
 
     def _sort_neighbors(self, neighbors):
-        """Return neighbors sorted by order."""
+        """
+        Sort a list of neighbor nodes by their order attribute.
+
+        Args:
+            neighbors: A list of neighbor node IDs.
+
+        Returns:
+            list: The sorted list of neighbor node IDs.
+        """
         neighbors = list(neighbors)
         orders = [self.graph.nodes[neighbor]["order"] for neighbor in neighbors]
         neighbors = [neighbor for _, neighbor in sorted(zip(orders, neighbors))]
         return neighbors
 
     def get_node_penalty_range(self, node_id):
+        """
+        Get the penalty range for a given node.
+
+        The penalty range is defined by the penalty value of the node and the penalty value of its parent node.
+
+        Args:
+            node_id: The ID of the node.
+
+        Returns:
+            tuple: A tuple containing the minimum and maximum penalty values for the node.
+        """
         node = self.graph.nodes[node_id]
         start = node["pen"]
         # Find parent node
@@ -75,6 +156,15 @@ class SummaryTree:
 
     @property
     def summary_path(self):
+        """
+        Get the path through the summary tree for summarization.
+
+        This path starts from the heads of the tree and traverses the tree in a depth-first
+        post-order, ensuring that child nodes are summarized before their parents.
+
+        Returns:
+            list: A list of node IDs representing the summary path.
+        """
         summary_path = []
         for head in self.heads:
             summary_path += list(
@@ -88,6 +178,15 @@ class SummaryTree:
 
     @property
     def outline_path(self):
+        """
+        Get the path through the summary tree for outline generation.
+
+        This path starts from the heads of the tree and traverses the tree in a depth-first
+        pre-order, ensuring that parent nodes are visited before their children.
+
+        Returns:
+            list: A list of node IDs representing the outline path.
+        """
         outline_path = []
         for head in self.heads:
             outline_path += list(
@@ -100,6 +199,15 @@ class SummaryTree:
         return outline_path
 
     def get_penalty_level_cut(self, penalty_level):
+        """
+        Get the nodes in the summary tree at a specific penalty level.
+
+        Args:
+            penalty_level (float): The penalty level to cut the tree at.
+
+        Returns:
+            list: A list of node IDs representing the nodes at the specified penalty level.
+        """
         summary_path = self.summary_path
         penalty_ranges = [self.get_node_penalty_range(node) for node in summary_path]
         return [
@@ -109,12 +217,26 @@ class SummaryTree:
         ]
 
     def compute_node_level(self):
+        """
+        Compute the level of each node in the summary tree.
+
+        The level of a node represents its depth in the tree, with the heads having a level of 0.
+        """
         for head in self.heads:
             shortest_path = nx.shortest_path(self.graph, source=head)
             node_levels = {node: len(shortest_path[node]) - 1 for node in shortest_path}
             nx.set_node_attributes(self.graph, node_levels, "level")
 
     def _find_change_points(self, signal: np.array) -> None:
+        """
+        Find change points in the given signal using the specified penalty values.
+
+        This method iterates through the penalty values, performing change point detection
+        at each level and optionally denoising the signal between levels.
+
+        Args:
+            signal (np.array): The input signal.
+        """
         bkps = []
         centered_signal = signal
         for pen in self.penalties:
@@ -135,6 +257,15 @@ class SummaryTree:
         self.bkpts_matrix = bkpt_matrix
 
     def _build_tree(self) -> None:
+        """
+        Build the summary tree from the detected change points.
+
+        This method constructs a directed graph where each node represents a segment of the text
+        and the edges represent the hierarchical relationships between segments.
+
+        Returns:
+            nx.DiGraph: The summary tree as a directed graph.
+        """
         bkpts = self.bkpts
 
         penalties = self.penalties
@@ -207,6 +338,13 @@ class SummaryTree:
         return G
 
     def plot_graph(self, chunks_df, node_size=50):
+        """
+        Plot the summary tree using Plotly.
+
+        Args:
+            chunks_df (pd.DataFrame): Dataframe containing the text chunks.
+            node_size (int, optional): The size of the nodes in the plot. Defaults to 50.
+        """
         G = self.graph
         pos = {
             node: [
@@ -285,5 +423,15 @@ class SummaryTree:
 
 
 def count_words_in_segment(segment, chunks_df):
+    """
+    Count the total number of words in a segment of text chunks.
+
+    Args:
+        segment (tuple): A tuple representing the segment by its start and end indices.
+        chunks_df (pd.DataFrame): Dataframe containing the text chunks.
+
+    Returns:
+        int: The total number of words in the segment.
+    """
     start, end = segment
     return chunks_df.iloc[start:end]["Length"].sum()
