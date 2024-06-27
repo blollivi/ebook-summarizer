@@ -16,7 +16,8 @@ Built using the Kedro pipeline framework, the Book Summarizer project offers a m
 #### Spoiler: Example of tree structure representation of a book
 
 ![Summary Tree](images/summary_tree.png)
-To knoz how this tree is built, please refer to the pipeline details section: [Pipeline Details and Data Flow](#pipeline-details-and-data-flow)
+Each node in the tree represents a segment of the book, with start and end indices indicating the range of text covered by the segment. The tree structure reflects the hierarchical organization of the book, with parent nodes summarizing the content of their children.
+To know how this tree is built, please refer to the pipeline details section: [Pipeline Details and Data Flow](#pipeline-details-and-data-flow)
 
 
 ## Getting Started
