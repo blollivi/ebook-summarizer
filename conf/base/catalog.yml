@@ -24,3 +24,7 @@ umap_projection:
 summary_tree:
   type: pickle.PickleDataset
   filepath: data/02_intermediate/summary_tree.pkl
+
+hierarchical_summary:
+  type: pickle.PickleDataset
+  filepath: data/04_feature/hierarchical_summary.pkl
