@@ -4,6 +4,17 @@ from langchain_core.output_parsers import JsonOutputParser
 from langchain.output_parsers import RetryOutputParser
 
 from .prompts import build_prompt_template
+from langchain_google_genai._enums import (
+    HarmBlockThreshold,
+    HarmCategory,
+)
+
+safety_settings = {
+    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+}
 
 
 class LLMEngine:
@@ -16,13 +27,14 @@ class LLMEngine:
 
         GOOGLE_API_KEY = "AIzaSyBBUP5cLkckeHhariMLznIwnUYMv1jc0vM"
 
-        self.prompt = build_prompt_template()
+        self.prompt = build_prompt_template(with_context=True)
 
         self.chat = ChatGoogleGenerativeAI(
             model="gemini-1.5-flash",
             google_api_key=GOOGLE_API_KEY,
             generation_config={"response_mime_type": "application/json"},
-            temperature=0.3,
+            temperature=0.5,
+            safety_settings=safety_settings,
         )
 
         self.chain = self.prompt | self.chat
@@ -63,17 +75,22 @@ class LLMEngine:
                 time.sleep(time_to_wait)
                 self._reset_counters()
 
-    def generate_response(self, llm_args: dict):
+    def generate_response(self, chain_args: dict, parse_output: bool = True):
         self._check_limits()
-        response = self.chain.invoke(**llm_args)
+        response = self.chain.invoke(chain_args)
         used_tokens = (
             response.usage_metadata["input_tokens"]
             + response.usage_metadata["output_tokens"]
         )
         self.token_count += used_tokens
         self.call_count += 1
-
-        try:
-            return self.parser.parse(response.content)
-        except Exception as e:
-            return self.retry_parser.parse_with_prompt(response.content, self.prompt)
+        print(f"Used {used_tokens} tokens. Total: {self.token_count}")
+        if parse_output:
+            try:
+                return self.parser.parse(response.content)
+            except Exception as e:
+                return self.retry_parser.parse_with_prompt(
+                    response.content, self.prompt
+                )
+        else:
+            return response.content
