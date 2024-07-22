@@ -3,6 +3,7 @@ import ruptures as rpt
 import networkx as nx
 from plotly import graph_objects as go
 from sklearn.metrics.pairwise import cosine_similarity
+from tqdm import tqdm
 
 
 def get_segments_from_breakpoints(bkpts: np.array):
@@ -69,7 +70,10 @@ class SummaryTree:
     """
 
     def __init__(
-        self, penalties: np.array = np.arange(2, 50, 0.25), denoise: bool = True
+        self,
+        penalties: np.array = np.arange(2, 50, 0.25),
+        denoise: bool = True,
+        algorithm: str = "binseg",
     ):
         """
         Initialize the SummaryTree.
@@ -79,9 +83,11 @@ class SummaryTree:
                 Defaults to np.arange(2, 50, 0.25).
             denoise (bool, optional): Whether to denoise the signal before change point detection.
                 Defaults to True.
+            algorithm (str, optional): The algorithm to use for change point detection. Defaults to "binseg".
         """
         self.penalties = penalties
         self.denoise = denoise
+        self.algorithm = algorithm
 
     def fit(self, signal: np.array):
         """
@@ -239,10 +245,17 @@ class SummaryTree:
         """
         bkps = []
         centered_signal = signal
-        for pen in self.penalties:
-            cost = rpt.costs.CostCosine()
-            model = rpt.Binseg(model="cosine").fit(centered_signal)
-            # model = rpt.KernelCPD(kernel="cosine", min_size=3).fit(centered_signal)
+
+        for pen in tqdm(self.penalties, desc="Finding Change Points"):
+            # cost = rpt.costs.CostCosine()
+            if self.algorithm == "binseg":
+                model = rpt.Binseg(model="cosine", min_size=2)
+            elif self.algorithm == "pelt":
+                model = rpt.KernelCPD(kernel="cosine", min_size=2)
+            else:
+                raise ValueError("Invalid algorithm. Must be 'binseg' or 'pelt'.")
+
+            model.fit(centered_signal)
             bkps.append(model.predict(pen=pen))
 
             if self.denoise:
@@ -337,19 +350,22 @@ class SummaryTree:
 
         return G
 
-    def plot_graph(self, chunks_df, node_size=50):
+    def plot_graph(self, chunks_df, node_size=50, log_scale=False):
         """
-        Plot the summary tree using Plotly.
+        Plot the summary tree using Plotly with an option for log scale on the y-axis (penalties).
 
         Args:
             chunks_df (pd.DataFrame): Dataframe containing the text chunks.
-            node_size (int, optional): The size of the nodes in the plot. Defaults to 50.
+            node_size (int, optional): The base size of the nodes in the plot. Defaults to 50.
+            log_scale (bool, optional): Whether to use log scale for the y-axis. Defaults to False.
         """
         G = self.graph
+
+        # Apply log transformation to y-coordinates (penalties) if log_scale is True
         pos = {
             node: [
                 (G.nodes[node]["start"] + G.nodes[node]["end"]) / 2,
-                G.nodes[node]["pen"],
+                np.log1p(G.nodes[node]["pen"]) if log_scale else G.nodes[node]["pen"],
             ]
             for node in G.nodes
         }
@@ -365,7 +381,7 @@ class SummaryTree:
             node_x.append(x)
             node_y.append(y)
             node_text.append(f"{node}")
-            node_colors.append(G.nodes[node]["pen"])
+            node_colors.append(G.nodes[node]["pen"])  # Keep original penalty for color
             node_sizes.append(count_words_in_segment(node, chunks_df))
 
         node_sizes = np.sqrt(node_sizes / np.max(node_sizes)) * node_size
@@ -407,19 +423,25 @@ class SummaryTree:
             textposition="top center",
         )
 
-        fig = go.Figure(
-            data=edge_traces + [node_trace],
-            layout=go.Layout(
-                showlegend=False,
-                hovermode="closest",
-                margin=dict(b=20, l=5, r=5, t=40),
-                xaxis=dict(showgrid=False, zeroline=False),
-                yaxis=dict(showgrid=False, zeroline=False),
-                height=600,
-                width=1000,
+        layout = go.Layout(
+            showlegend=False,
+            hovermode="closest",
+            margin=dict(b=20, l=5, r=5, t=40),
+            xaxis=dict(showgrid=False, zeroline=False, title="Position in Text"),
+            yaxis=dict(
+                showgrid=False,
+                zeroline=False,
+                type=(
+                    "log" if log_scale else "linear"
+                ),  # Set y-axis scale based on log_scale argument
+                title="Log(Penalty)" if log_scale else "Penalty",
             ),
+            height=600,
+            width=1000,
         )
-        fig.show()
+
+        fig = go.Figure(data=edge_traces + [node_trace], layout=layout)
+        return fig
 
 
 def count_words_in_segment(segment, chunks_df):

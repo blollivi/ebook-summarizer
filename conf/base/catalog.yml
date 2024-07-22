@@ -17,6 +17,10 @@ pca_projection:
   type: pandas.ParquetDataset
   filepath: data/02_intermediate/pca_projection.parquet
 
+exemplars_pca_projection:
+  type: pandas.ParquetDataset
+  filepath: data/02_intermediate/exemplars_pca_projection.parquet
+
 umap_projection:
   type: pandas.ParquetDataset
   filepath: data/02_intermediate/umap_projection.parquet

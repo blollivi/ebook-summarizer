@@ -19,8 +19,15 @@ def build_summary_tree(
     embeddings: pd.DataFrame, chpt_detection_params: dict
 ) -> SummaryTree:
     penalty_params = chpt_detection_params["penalty_params"]
-    penalties = np.arange(
-        penalty_params["start"], penalty_params["end"], penalty_params["step"]
+    algortihm = chpt_detection_params["algorithm"]
+    if penalty_params["scale"] == "log":
+        sampler = np.geomspace
+    elif penalty_params["scale"] == "linear":
+        sampler = np.linspace
+    else:
+        raise ValueError("Invalid scale value. Must be 'log' or 'linear'.")
+    penalties = sampler(
+        penalty_params["start"], penalty_params["end"], penalty_params["steps"]
     )
     denoise = chpt_detection_params["denoise"]
     summary_tree = SummaryTree(penalties=penalties, denoise=denoise).fit(

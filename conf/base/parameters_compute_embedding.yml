@@ -6,6 +6,6 @@ umap:
   densmap: False
 
 pca:
-  explained_variance_ratio: 0.95
+  explained_variance_ratio: 0.97
 
 voyageai_model_name: voyage-multilingual-2

@@ -39,7 +39,7 @@ def create_hover_plot(umap_projection: pd.DataFrame, chunks_df: pd.DataFrame, co
         title="Hover over points",
     )
     output_file("hover_callback.html")
-    sizes = ((sizes - np.min(sizes) + 1 ) / (np.max(sizes) - np.min(sizes)) + 0.01 ) * 20
+    sizes = ((sizes - np.min(sizes) + 1 ) / (np.max(sizes) - np.min(sizes)) + 0.01 ) * 0.1
     source = ColumnDataSource(
         data=dict(x=x, y=y, text=texts, colors=colors, sizes=sizes)
     )
@@ -47,7 +47,7 @@ def create_hover_plot(umap_projection: pd.DataFrame, chunks_df: pd.DataFrame, co
         x="x",
         y="y",
         color=mapper,
-        size="sizes",
+        radius="sizes",
         alpha=0.9,
         hover_alpha=1.0,
         line_color="white",  # Add white marker border

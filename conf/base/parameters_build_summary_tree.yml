@@ -1,6 +1,9 @@
 change_point_detection:
   penalty_params:
-    start: 1
+    start: 0.1
     end: 10
-    step: 0.5
+    steps: 50
+    scale: linear
   denoise: False
+
+  algorithm: "binseg"
