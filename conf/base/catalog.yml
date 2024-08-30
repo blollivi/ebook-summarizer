@@ -29,6 +29,15 @@ summary_tree:
   type: pickle.PickleDataset
   filepath: data/02_intermediate/summary_tree.pkl
 
-knowledge_graph:
+
+tree_cut:
   type: json.JSONDataset
-  filepath: data/04_feature/kg_4.json
+  filepath: data/02_intermediate/tree_cut.json
+
+
+hierarchical_summary:
+  type: partitions.PartitionedDataset
+  path: data/02_intermediate/hierarchical_summary
+  dataset: json.JSONDataset
+  filename_suffix: .json
+
