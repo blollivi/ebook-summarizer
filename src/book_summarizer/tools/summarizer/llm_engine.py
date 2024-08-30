@@ -1,8 +1,5 @@
 import time
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_openai import ChatOpenAI
-from langchain_groq import ChatGroq
-
 from langchain_core.output_parsers import JsonOutputParser
 from langchain.output_parsers import RetryOutputParser
 
@@ -18,27 +15,6 @@ safety_settings = {
     HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
 }
 
-chat_backends = {
-    "gemini": ChatGoogleGenerativeAI(
-        model="gemini-1.5-pro",
-        google_api_key="AIzaSyBBUP5cLkckeHhariMLznIwnUYMv1jc0vM",
-        generation_config={"response_mime_type": "application/json"},
-        temperature=0.1,
-        safety_settings=safety_settings,
-    ),
-    "openai": ChatOpenAI(
-        api_key="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",
-        model="gpt-4o-mini",
-        temperature=0.1,
-        response_format={"type": "json_object"},
-    ),
-    "groq": ChatGroq(
-        model_name="llama-3.1-70b-versatile",
-        api_key="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",
-        response_format={"type": "json_object"},
-        temperature=0.1,
-    ),
-}
 
 
 class LLMEngine:
@@ -72,7 +48,13 @@ class LLMEngine:
         self.call_count = 0
         self.last_reset_time = time.time()
         self.prompt_template = prompt_template
-        self.chat = chat_backends["openai"]
+        self.chat = ChatGoogleGenerativeAI(
+            model=google_model_name,
+            google_api_key=google_api_key,
+            generation_config={"response_mime_type": "application/json"},
+            temperature=temperature,
+            safety_settings=safety_settings,
+    )
         self.chain = self.prompt_template | self.chat
         self.parser = JsonOutputParser()
         self.retry_parser = RetryOutputParser.from_llm(
@@ -129,13 +111,13 @@ class LLMEngine:
         self._check_limits()
         print(chain_args.keys())
         response = self.chain.invoke(chain_args)
-        # used_tokens = (
-        #     response.usage_metadata["input_tokens"]
-        #     + response.usage_metadata["output_tokens"]
-        # )
-        # self.token_count += used_tokens
+        used_tokens = (
+            response.usage_metadata["input_tokens"]
+            + response.usage_metadata["output_tokens"]
+        )
+        self.token_count += used_tokens
         self.call_count += 1
-        # print(f"Used {used_tokens} tokens. Total: {self.token_count}")
+        print(f"Used {used_tokens} tokens. Total: {self.token_count}")
 
         if parse_output:
             try:
