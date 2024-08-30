@@ -1,6 +1,6 @@
 umap:
   n_neighbors: 10
-  n_components: 2
+  n_components: 10
   metric: cosine
   min_dist: 0.3
   densmap: False

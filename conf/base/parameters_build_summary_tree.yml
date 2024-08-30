@@ -1,9 +1,11 @@
 change_point_detection:
   penalty_params:
-    start: 0.1
-    end: 10
+    start: 5
+    end: 700
     steps: 50
-    scale: linear
+    scale: log
   denoise: False
 
-  algorithm: "binseg"
+  algorithm: binseg
+
+  metric: l1
