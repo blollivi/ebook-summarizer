@@ -16,7 +16,6 @@ safety_settings = {
 }
 
 
-
 class LLMEngine:
     """
     A class to manage interactions with a language model, including rate limiting and response parsing.
@@ -54,12 +53,18 @@ class LLMEngine:
             generation_config={"response_mime_type": "application/json"},
             temperature=temperature,
             safety_settings=safety_settings,
-    )
+        )
         self.chain = self.prompt_template | self.chat
         self.parser = JsonOutputParser()
         self.retry_parser = RetryOutputParser.from_llm(
             parser=self.parser,
-            llm=chat_backends["openai"],
+            llm=ChatGoogleGenerativeAI(
+                model=google_model_name,
+                google_api_key=google_api_key,
+                generation_config={"response_mime_type": "application/json"},
+                temperature=0,
+                safety_settings=safety_settings,
+            )
         )
 
     def _reset_counters(self):
