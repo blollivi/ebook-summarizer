@@ -1,5 +1,8 @@
+from typing import Tuple
 import networkx as nx
 import pandas as pd
+import numpy as np
+import json
 
 from book_summarizer.tools.summarizer.summary_tree import SummaryTree
 from book_summarizer.tools.summarizer.llm_engine import LLMEngine
@@ -65,75 +68,39 @@ class Summarizer:
         current_node_idx = context_nodes.index(current_node)
         return context_nodes[:current_node_idx]
 
-    def build_context_prompt(self, current_node):
+    def build_chunks_prompt(self, head: Tuple[int, int]):
+        chunks =  self.chunks_df.reset_index(drop=True)
+        chunks = chunks.iloc[head[0] : head[1] + 1]["text"]
+        return chunks.to_json()
+
+    def build_summary_tree_prompt(self, head: Tuple[int, int]):
         """
-        Build the context prompt for a given node.
-
-        The context prompt includes the summaries of all nodes in the context path,
-        concatenated together.
-
-        Args:
-            current_node: The node for which to build the context prompt.
-
-        Returns:
-            str: The context prompt string.
+        Extract all the descendant tree of a given head and return it as a JSON string.
         """
-        context_path = self.build_context_path(current_node)
 
-        return "\n".join(
-            [
-                self.summary_tree.graph.nodes[node_id]["summary"]
-                for node_id in context_path
-            ]
-        )
+        descendants = nx.descendants(self.summary_tree.graph, head)
+        descendants.add(head)
+        sub_graph = self.summary_tree.graph.subgraph(descendants)
+        tree_dict = nx.readwrite.json_graph.tree_data(sub_graph, root=head)
 
-    def summarize_node(self, node_id: int):
-        """
-        Generate a summary for a given node.
+        def _clean_tree(tree_dict):
+            if "children" in tree_dict:
+                tree_dict["children"] = [
+                    _clean_tree(child) for child in tree_dict["children"]
+                ]
+            return {
+                key: tree_dict[key]
+                for key in ["start", "end", "children"]
+                if key in tree_dict
+            }
 
-        This method retrieves the text chunks associated with the node, builds the context prompt,
-        and uses the LLMEngine to generate a summary.
+        tree_dict = _clean_tree(tree_dict)
 
-        Args:
-            node_id (int): The ID of the node to summarize.
-
-        Returns:
-            dict: The generated summary, or None if an error occurred.
-        """
-        node = self.summary_tree.graph.nodes[node_id]
-
-        child_nodes = list(self.summary_tree.graph.successors(node_id))
-        if len(child_nodes) == 0:
-            chunks = (
-                self.chunks_df["text"].iloc[node["start"] : node["end"] + 1].to_list()
-            )
-
-        else:
-            chunks = [
-                self.summary_tree.graph.nodes[node_id]["summary"]
-                for node_id in child_nodes
-            ]
-
-        context_path = self.build_context_path(node_id)
-        context = self.build_context_prompt(node_id)
-        print(
-            f"Summarizing node {node_id} from {child_nodes} with context {context_path}"
-        )
-        chunk = "\n".join(chunks)
-        try:
-            return self.llm_engine.generate_response(
-                dict(chunk=chunk, context=context, language="French")
-            )
-        except Exception as e:
-            print(f"Error summarizing node {node_id}: {e}")
-            return None
+        return json.dumps(tree_dict)
 
     def summarize_tree(self, head):
         """
         Summarize the subtree rooted at the given head node.
-
-        This method iterates through the nodes in the subtree, generating a summary for each node
-        that does not already have one.
 
         Args:
             head: The head node of the subtree to summarize.
@@ -141,29 +108,18 @@ class Summarizer:
         Returns:
             dict: The generated summary for the head node, or None if an error occurred.
         """
-        i = 0
-        head_idx = self.summary_path.index(head) + 1
 
-        for i in range(head_idx):
-            node = self.summary_path[i]
-            if "summary" in self.summary_tree.graph.nodes[node]:
-                continue
-            node_summary = self.summarize_node(node)
-            if node_summary is None:
-                # Stop the loop
-                self.is_error = False
-                break
-            nx.set_node_attributes(
-                self.summary_tree.graph,
-                {
-                    node: {
-                        "summary": node_summary["summary"],
-                        "title": node_summary["title"],
-                    }
-                },
+        # Get context prompts
+        chunks_prompt = self.build_chunks_prompt(head)
+        summary_tree_prompt = self.build_summary_tree_prompt(head)
+
+        return self.llm_engine.generate_response(
+            dict(
+                chunks=chunks_prompt,
+                summary_tree=summary_tree_prompt,
+                language="English",
             )
-
-        return node_summary
+        )
 
     def summarize(self):
         """

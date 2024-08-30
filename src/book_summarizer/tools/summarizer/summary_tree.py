@@ -74,6 +74,7 @@ class SummaryTree:
         penalties: np.array = np.arange(2, 50, 0.25),
         denoise: bool = True,
         algorithm: str = "binseg",
+        metric: str = "cosine",
     ):
         """
         Initialize the SummaryTree.
@@ -84,10 +85,12 @@ class SummaryTree:
             denoise (bool, optional): Whether to denoise the signal before change point detection.
                 Defaults to True.
             algorithm (str, optional): The algorithm to use for change point detection. Defaults to "binseg".
+            metric (str, optional): The metric to use for computing the cost of change points. Defaults to "cosine".
         """
         self.penalties = penalties
         self.denoise = denoise
         self.algorithm = algorithm
+        self.metric = metric
 
     def fit(self, signal: np.array):
         """
@@ -249,9 +252,11 @@ class SummaryTree:
         for pen in tqdm(self.penalties, desc="Finding Change Points"):
             # cost = rpt.costs.CostCosine()
             if self.algorithm == "binseg":
-                model = rpt.Binseg(model="cosine", min_size=2)
+                model = rpt.Binseg(model=self.metric, min_size=2, jump=1)
+            elif self.algorithm == "window":
+                model = rpt.Window(width=20, model=self.metric)
             elif self.algorithm == "pelt":
-                model = rpt.KernelCPD(kernel="cosine", min_size=2)
+                model = rpt.KernelCPD(kernel=self.metric, min_size=2)
             else:
                 raise ValueError("Invalid algorithm. Must be 'binseg' or 'pelt'.")
 

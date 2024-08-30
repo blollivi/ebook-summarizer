@@ -5,7 +5,7 @@ generated using Kedro 0.19.6
 
 from kedro.pipeline import Pipeline, pipeline, node
 
-from .nodes import build_summary_tree, summarize_all_tree_nodes
+from .nodes import build_summary_tree, summarize_tree, extract_tree_cut
 
 
 def create_pipeline(**kwargs) -> Pipeline:
@@ -13,15 +13,21 @@ def create_pipeline(**kwargs) -> Pipeline:
         [
             node(
                 func=build_summary_tree,
-                inputs=["pca_projection", "params:change_point_detection"],
+                inputs=["umap_projection", "params:change_point_detection"],
                 outputs="summary_tree",
                 name="build_summary_tree",
             ),
             node(
-                func=summarize_all_tree_nodes,
-                inputs=["summary_tree", "chunks"],
+                func=extract_tree_cut,
+                inputs=["summary_tree", "params:tree_cut"],
+                outputs="tree_cut",
+                name="extract_tree_cut",
+            ),
+            node(
+                func=summarize_tree,
+                inputs=["summary_tree", "params:head", "chunks", "params:llm_engine"],
                 outputs="hierarchical_summary",
-                name="summarize_all_tree_nodes",
+                name="summarize_tree",
             ),
         ]
     )

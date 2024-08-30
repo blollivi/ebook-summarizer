@@ -1,5 +1,8 @@
 import time
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
+
 from langchain_core.output_parsers import JsonOutputParser
 from langchain.output_parsers import RetryOutputParser
 
@@ -8,14 +11,35 @@ from langchain_google_genai._enums import (
     HarmCategory,
 )
 
-from .prompts import build_prompt_template
-
 safety_settings = {
     HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
     HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
     HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
     HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
 }
+
+chat_backends = {
+    "gemini": ChatGoogleGenerativeAI(
+        model="gemini-1.5-pro",
+        google_api_key="AIzaSyBBUP5cLkckeHhariMLznIwnUYMv1jc0vM",
+        generation_config={"response_mime_type": "application/json"},
+        temperature=0.1,
+        safety_settings=safety_settings,
+    ),
+    "openai": ChatOpenAI(
+        api_key="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",
+        model="gpt-4o-mini",
+        temperature=0.1,
+        response_format={"type": "json_object"},
+    ),
+    "groq": ChatGroq(
+        model_name="llama-3.1-70b-versatile",
+        api_key="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",
+        response_format={"type": "json_object"},
+        temperature=0.1,
+    ),
+}
+
 
 class LLMEngine:
     """
@@ -25,7 +49,15 @@ class LLMEngine:
     managing token and call limits, and parsing the output into a structured format.
     """
 
-    def __init__(self, google_api_key: str, token_limit_per_minute=1e6, call_limit_per_minute=15):
+    def __init__(
+        self,
+        prompt_template: str,
+        google_api_key: str,
+        google_model_name: str,
+        temperature: float,
+        token_limit_per_minute: int,
+        call_limit_per_minute: int,
+    ):
         """
         Initialize the LLMEngine.
 
@@ -39,24 +71,13 @@ class LLMEngine:
         self.token_count = 0
         self.call_count = 0
         self.last_reset_time = time.time()
-        self.prompt = build_prompt_template(with_context=True)
-        self.chat = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
-            google_api_key=google_api_key,
-            generation_config={"response_mime_type": "application/json"},
-            temperature=0.2,
-            safety_settings=safety_settings,
-        )
-        self.chain = self.prompt | self.chat
+        self.prompt_template = prompt_template
+        self.chat = chat_backends["openai"]
+        self.chain = self.prompt_template | self.chat
         self.parser = JsonOutputParser()
         self.retry_parser = RetryOutputParser.from_llm(
             parser=self.parser,
-            llm=ChatGoogleGenerativeAI(
-                model="gemini-1.5-flash",
-                google_api_key=google_api_key,
-                generation_config={"response_mime_type": "application/json"},
-                temperature=0.1,
-            ),
+            llm=chat_backends["openai"],
         )
 
     def _reset_counters(self):
@@ -106,21 +127,24 @@ class LLMEngine:
             Exception: If parsing fails and cannot be recovered using the retry parser.
         """
         self._check_limits()
+        print(chain_args.keys())
         response = self.chain.invoke(chain_args)
-        used_tokens = (
-            response.usage_metadata["input_tokens"]
-            + response.usage_metadata["output_tokens"]
-        )
-        self.token_count += used_tokens
+        # used_tokens = (
+        #     response.usage_metadata["input_tokens"]
+        #     + response.usage_metadata["output_tokens"]
+        # )
+        # self.token_count += used_tokens
         self.call_count += 1
-        print(f"Used {used_tokens} tokens. Total: {self.token_count}")
+        # print(f"Used {used_tokens} tokens. Total: {self.token_count}")
 
         if parse_output:
             try:
                 return self.parser.parse(response.content)
             except Exception as e:
+                print(e)
+                prompt_value = self.prompt_template.format_prompt(**chain_args)
                 return self.retry_parser.parse_with_prompt(
-                    response.content, self.prompt
+                    response.content, prompt_value
                 )
         else:
             return response.content
