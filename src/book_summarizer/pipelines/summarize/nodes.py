@@ -5,6 +5,7 @@ from kedro.config import OmegaConfigLoader
 from kedro.framework.project import settings
 from pathlib import Path
 
+from book_summarizer.tools.summarizer.change_point_detector import ChangePointDetector
 from book_summarizer.tools.summarizer.summary_tree import SummaryTree
 from book_summarizer.tools.summarizer.llm_engine import LLMEngine
 from book_summarizer.tools.summarizer.summarizer import Summarizer
@@ -32,12 +33,16 @@ def build_summary_tree(
         penalty_params["start"], penalty_params["end"], penalty_params["steps"]
     )
 
-    summary_tree = SummaryTree(
+    bkpts_matrix, bkpts = ChangePointDetector(
         penalties=penalties,
         denoise=chpt_detection_params["denoise"],
         algorithm=chpt_detection_params["algorithm"],
         metric=chpt_detection_params["metric"],
-    ).fit(embeddings.to_numpy())
+    ).fit_predict(embeddings.to_numpy())
+
+    summary_tree = SummaryTree(
+        bkpts_matrix=bkpts_matrix, bkpts=bkpts, penalties=penalties
+    ).fit()
     return summary_tree
 
 
@@ -72,7 +77,7 @@ def summarize_tree(
     llm_engine = LLMEngine(
         prompt_template=prompt_template,
         google_api_key=credentials["google_api_key"],
-        **llm_engine_params
+        **llm_engine_params,
     )
 
     summarizer = Summarizer(summary_tree, llm_engine, chunks_df)

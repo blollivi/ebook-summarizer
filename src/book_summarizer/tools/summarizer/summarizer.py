@@ -35,39 +35,6 @@ class Summarizer:
         self.progress = []  # List of nodes that have been summarized
         self.is_error = False
 
-    def build_tree_outline(self, head, level, outline=""):
-        """
-        Recursively build the outline of the summary tree.
-
-        Args:
-            head: The current node being visited.
-            level (int): The level of the current node in the tree.
-            outline (str, optional): The outline string being built. Defaults to "".
-        """
-        child_nodes = list(self.summary_tree.graph.successors(head))
-
-        for child in child_nodes:
-            outline[child] = level
-            self.build_tree_outline(child, level + 1, outline)
-
-    def build_context_path(self, current_node):
-        """
-        Build the context path for a given node.
-
-        The context path includes all nodes on the path from the root to the current node,
-        up to the node with the same penalty level as the current node.
-
-        Args:
-            current_node: The node for which to build the context path.
-
-        Returns:
-            list: The list of nodes in the context path.
-        """
-        current_node_penalty = self.summary_tree.graph.nodes[current_node]["pen"]
-        context_nodes = self.summary_tree.get_penalty_level_cut(current_node_penalty)
-        current_node_idx = context_nodes.index(current_node)
-        return context_nodes[:current_node_idx]
-
     def build_chunks_prompt(self, head: Tuple[int, int]):
         chunks = self.chunks_df.reset_index(drop=True)
         chunks = chunks.iloc[head[0] : head[1] + 1]["text"]
@@ -108,7 +75,7 @@ class Summarizer:
             if self.is_error:
                 break
             else:
-                self.summarize_tree(head)
+                self.summarize_subtree(head)
 
     def check_output(self, output: dict, head: tuple) -> dict:
         """
@@ -119,7 +86,6 @@ class Summarizer:
 
         """
         sections = self.summary_tree.get_subtree_nodes_list(head)
-
         output_sections = [(section["start"], section["end"]) for section in output]
 
         # Check if all sections are present in the output
