@@ -1,3 +1,4 @@
+from typing import Tuple
 import numpy as np
 import ruptures as rpt
 import networkx as nx
@@ -224,6 +225,14 @@ class SummaryTree:
             for node, (min_penalty, max_penalty) in zip(summary_path, penalty_ranges)
             if min_penalty <= penalty_level < max_penalty
         ]
+
+    def get_subtree_nodes_list(self, head: Tuple[int, int]):
+
+        descendants = nx.descendants(self.graph, head)
+        descendants.add(head)
+        sub_graph = self.graph.subgraph(descendants)
+
+        return list(sub_graph.nodes)
 
     def compute_node_level(self):
         """

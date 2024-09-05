@@ -12,7 +12,6 @@ from book_summarizer.tools.summarizer.prompts import build_summary_tree_prompt_t
 
 
 project_root = Path(__file__).resolve().parents[4]
-project_root = "."
 conf_path = str(Path(project_root) / settings.CONF_SOURCE)
 conf_loader = OmegaConfigLoader(conf_source=conf_path)
 credentials = conf_loader["credentials"]
@@ -50,7 +49,7 @@ def extract_tree_cut(summary_tree: SummaryTree, tree_cut_params: dict) -> Summar
         node_counts.append(len(summary_tree.get_penalty_level_cut(pen)))
 
     cumul_node_counts = np.cumsum(node_counts)
-    # Find the penalty level that corresponds to the 95th ot the last cumulative node count
+    # Find the penalty level that corresponds to the given cut threshold
     cut_thd = tree_cut_params["cut_thd"]
     cut_idx = np.where(cumul_node_counts >= cut_thd * cumul_node_counts[-1])[0][0]
     penalty_cut = summary_tree.penalties[cut_idx]
@@ -77,5 +76,10 @@ def summarize_tree(
     )
 
     summarizer = Summarizer(summary_tree, llm_engine, chunks_df)
+    output = summarizer.summarize_subtree(head_tuple)
 
-    return {head: summarizer.summarize_tree(head_tuple)}
+    try:
+        return {head: summarizer.check_output(output, head_tuple)}
+    except Exception as e:
+        print(f"Output Check Error: {e}")
+        return {head: output}

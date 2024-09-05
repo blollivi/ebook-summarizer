@@ -69,36 +69,11 @@ class Summarizer:
         return context_nodes[:current_node_idx]
 
     def build_chunks_prompt(self, head: Tuple[int, int]):
-        chunks =  self.chunks_df.reset_index(drop=True)
+        chunks = self.chunks_df.reset_index(drop=True)
         chunks = chunks.iloc[head[0] : head[1] + 1]["text"]
         return chunks.to_json()
 
-    def build_summary_tree_prompt(self, head: Tuple[int, int]):
-        """
-        Extract all the descendant tree of a given head and return it as a JSON string.
-        """
-
-        descendants = nx.descendants(self.summary_tree.graph, head)
-        descendants.add(head)
-        sub_graph = self.summary_tree.graph.subgraph(descendants)
-        tree_dict = nx.readwrite.json_graph.tree_data(sub_graph, root=head)
-
-        def _clean_tree(tree_dict):
-            if "children" in tree_dict:
-                tree_dict["children"] = [
-                    _clean_tree(child) for child in tree_dict["children"]
-                ]
-            return {
-                key: tree_dict[key]
-                for key in ["start", "end", "children"]
-                if key in tree_dict
-            }
-
-        tree_dict = _clean_tree(tree_dict)
-
-        return json.dumps(tree_dict)
-
-    def summarize_tree(self, head):
+    def summarize_subtree(self, head):
         """
         Summarize the subtree rooted at the given head node.
 
@@ -111,15 +86,17 @@ class Summarizer:
 
         # Get context prompts
         chunks_prompt = self.build_chunks_prompt(head)
-        summary_tree_prompt = self.build_summary_tree_prompt(head)
+        sections = self.summary_tree.get_subtree_nodes_list(head)
 
-        return self.llm_engine.generate_response(
+        sections_with_summary = self.llm_engine.generate_response(
             dict(
                 chunks=chunks_prompt,
-                summary_tree=summary_tree_prompt,
+                sections=json.dumps(sections),
                 language="English",
             )
         )
+
+        return sections_with_summary
 
     def summarize(self):
         """
@@ -132,3 +109,32 @@ class Summarizer:
                 break
             else:
                 self.summarize_tree(head)
+
+    def check_output(self, output: dict, head: tuple) -> dict:
+        """
+        Check the output of the LLM engine for errors.
+
+        Args:
+            output (dict): The output of the LLM engine.
+
+        """
+        sections = self.summary_tree.get_subtree_nodes_list(head)
+
+        output_sections = [(section["start"], section["end"]) for section in output]
+
+        # Check if all sections are present in the output
+        missing_sections = [
+            section for section in sections if section not in output_sections
+        ]
+
+        print("Missing sections:", missing_sections)
+
+        return [
+            {
+                "start": section["start"],
+                "end": section["end"],
+                "summary": section["summary"],
+                "title": section["title"],
+            }
+            for section in output
+        ]

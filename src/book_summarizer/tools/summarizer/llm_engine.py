@@ -59,7 +59,7 @@ class LLMEngine:
         self.retry_parser = RetryOutputParser.from_llm(
             parser=self.parser,
             llm=ChatGoogleGenerativeAI(
-                model=google_model_name,
+                model="gemini-1.5-flash",
                 google_api_key=google_api_key,
                 generation_config={"response_mime_type": "application/json"},
                 temperature=0,

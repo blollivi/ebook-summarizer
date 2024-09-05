@@ -5,4 +5,4 @@ llm_engine:
   token_limit_per_minute: 10000000
   call_limit_per_minute: 15
   google_model_name: gemini-1.5-pro
-  temperature: 0
+  temperature: 0.1
