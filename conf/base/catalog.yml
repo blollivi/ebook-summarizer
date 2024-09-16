@@ -41,3 +41,6 @@ hierarchical_summary:
   dataset: json.JSONDataset
   filename_suffix: .json
 
+global_summary:
+  type: json.JSONDataset
+  filepath: data/02_intermediate/global_summary.json

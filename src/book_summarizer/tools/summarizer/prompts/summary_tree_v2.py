@@ -5,13 +5,15 @@ import json
 
 
 SYSTEM_PROMPT = """<TASK DESCRIPTION>
+    **Context:**
     You are a skilled text analyzer and summarizer. Your task is to summarize all sections of a given text.
-    The text has an inherent tree structure, representing the outline: sections, divided into subsections, and so on.
+    The sections are defined by the first and last chunk of text that belong to that section.
+    Sections are nested in a tree like structure: Higher-level sections contain lower-level subsections.
 
     **Input**:
     1. A text, represented as a set of subsquent chunks. And formatted as a JSON object with given schema:
             {{<chunk_id>: <chunk_text>}}
-    2. The list of sections. A section is defined the its first and last chunk.
+    2. The flatten list of sections.
     JSON schema: List({{
         "start": <start_chunk_id>,
         "end": <end_chunk_id>,
@@ -37,7 +39,8 @@ SYSTEM_PROMPT = """<TASK DESCRIPTION>
 
 
     **IMPORTANT**
-    Make sure that all sections present in the input list are present in the output
+    Make sure that all sections present in the input list are present in the output.
+    Each summary must only reflect the information in the corresponding section.
 
     </TASK DESCRIPTION>
 

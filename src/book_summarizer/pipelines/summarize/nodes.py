@@ -4,12 +4,16 @@ import numpy as np
 from kedro.config import OmegaConfigLoader
 from kedro.framework.project import settings
 from pathlib import Path
+import json
 
 from book_summarizer.tools.summarizer.change_point_detector import ChangePointDetector
 from book_summarizer.tools.summarizer.summary_tree import SummaryTree
 from book_summarizer.tools.summarizer.llm_engine import LLMEngine
 from book_summarizer.tools.summarizer.summarizer import Summarizer
-from book_summarizer.tools.summarizer.prompts import build_summary_tree_prompt_template
+from book_summarizer.tools.summarizer.prompts import (
+    build_summary_tree_prompt_template,
+    build_aggregate_tree_prompt_template,
+)
 
 
 project_root = Path(__file__).resolve().parents[4]
@@ -43,6 +47,7 @@ def build_summary_tree(
     summary_tree = SummaryTree(
         bkpts_matrix=bkpts_matrix, bkpts=bkpts, penalties=penalties
     ).fit()
+
     return summary_tree
 
 
@@ -64,15 +69,12 @@ def extract_tree_cut(summary_tree: SummaryTree, tree_cut_params: dict) -> Summar
     return tree_cut
 
 
-def summarize_tree(
+def summarize_all(
+    tree_cut: list,
     summary_tree: SummaryTree,
-    head: str,
     chunks_df: pd.DataFrame,
     llm_engine_params: dict,
-) -> dict:
-    # Parse head
-    head_tuple = tuple([int(i) for i in head.split("-")])
-    print("Summarizing tree for head:", head_tuple)
+):
     prompt_template = build_summary_tree_prompt_template()
     llm_engine = LLMEngine(
         prompt_template=prompt_template,
@@ -81,10 +83,36 @@ def summarize_tree(
     )
 
     summarizer = Summarizer(summary_tree, llm_engine, chunks_df)
-    output = summarizer.summarize_subtree(head_tuple)
 
-    try:
-        return {head: summarizer.check_output(output, head_tuple)}
-    except Exception as e:
-        print(f"Output Check Error: {e}")
-        return {head: output}
+    hierarchical_summary = {}
+    for head in tree_cut:
+        head_str = "-".join([str(i) for i in head])
+        print(f"Summarizing tree for head: {head_str}")
+        output = summarizer.summarize_subtree(head)
+        try:
+            hierarchical_summary[head_str] = summarizer.check_output(output, head)
+        except Exception as e:
+            print(f"Output Check Error: {e}")
+            hierarchical_summary[head_str] = output
+
+    return hierarchical_summary
+
+
+def write_global_summary(hierarchical_summary: dict, llm_engine_params: dict):
+    prompt_template = build_aggregate_tree_prompt_template()
+    llm_engine = LLMEngine(
+        prompt_template=prompt_template,
+        google_api_key=credentials["google_api_key"],
+        **llm_engine_params,
+    )
+
+    all_sections = []
+    for head_str, section_loader in hierarchical_summary.items():
+        all_sections.extend(section_loader())
+
+    return llm_engine.generate_response(
+        dict(
+            sections=json.dumps(all_sections),
+            language="English",
+        )
+    )

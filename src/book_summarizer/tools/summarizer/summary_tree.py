@@ -148,7 +148,7 @@ class SummaryTree:
             )
         return outline_path
 
-    def get_penalty_level_cut(self, penalty_level):
+    def get_penalty_level_cut(self, penalty_level) -> list:
         """
         Get the nodes in the summary tree at a specific penalty level.
 
@@ -325,6 +325,103 @@ class SummaryTree:
             marker=dict(
                 showscale=True,
                 colorscale="Cividis",
+                color=node_colors,
+                size=node_sizes,
+                colorbar=dict(
+                    thickness=15,
+                    title="Penalty",
+                    xanchor="left",
+                    titleside="right",
+                ),
+                line_width=2,
+                opacity=1,
+            ),
+            textposition="top center",
+        )
+
+        layout = go.Layout(
+            showlegend=False,
+            hovermode="closest",
+            margin=dict(b=20, l=5, r=5, t=40),
+            xaxis=dict(showgrid=False, zeroline=False, title="Position in Text"),
+            yaxis=dict(
+                showgrid=False,
+                zeroline=False,
+                type=(
+                    "log" if log_scale else "linear"
+                ),  # Set y-axis scale based on log_scale argument
+                title="Log(Penalty)" if log_scale else "Penalty",
+            ),
+            height=600,
+            width=1000,
+        )
+
+        fig = go.Figure(data=edge_traces + [node_trace], layout=layout)
+        return fig
+
+    def plot_query_results(
+        self, query_results, chunks_df, node_size=50, log_scale=False
+    ):
+        G = self.graph
+
+        # Apply log transformation to y-coordinates (penalties) if log_scale is True
+        pos = {
+            node: [
+                (G.nodes[node]["start"] + G.nodes[node]["end"]) / 2,
+                np.log1p(G.nodes[node]["pen"]) if log_scale else G.nodes[node]["pen"],
+            ]
+            for node in G.nodes
+        }
+
+        node_x = []
+        node_y = []
+        node_text = []
+        node_colors = []
+        node_sizes = []
+
+        selected_nodes = query_results["ids"][0]
+        distances = query_results["distances"][0]
+
+        selected_nodes = [node.split("-") for node in selected_nodes]
+        selected_nodes = [(int(node[0]), int(node[1])) for node in selected_nodes]
+        
+        for node in G.nodes:
+            x, y = pos[node]
+            node_x.append(x)
+            node_y.append(y)
+            node_text.append(f"{node}")
+            if node in selected_nodes:
+                node_idx = selected_nodes.index(node)
+                node_colors.append(distances[node_idx])
+            else:
+                node_colors.append(1)
+            node_sizes.append(count_words_in_segment(node, chunks_df))
+
+        node_sizes = np.sqrt(node_sizes / np.max(node_sizes)) * node_size
+
+        edge_traces = []
+        for edge in G.edges:
+            x0, y0 = pos[edge[0]]
+            x1, y1 = pos[edge[1]]
+            edge_width = G.edges[edge]["weight"] * 3
+
+            edge_trace = go.Scatter(
+                x=[x0, x1, None],
+                y=[y0, y1, None],
+                line=dict(width=edge_width, color="rgba(0, 0, 0, 0.8)"),
+                hoverinfo="none",
+                mode="lines",
+            )
+            edge_traces.append(edge_trace)
+
+        node_trace = go.Scatter(
+            x=node_x,
+            y=node_y,
+            mode="markers+text",
+            text=node_text,
+            marker=dict(
+                showscale=True,
+                colorscale="Viridis_r",
                 color=node_colors,
                 size=node_sizes,
                 colorbar=dict(

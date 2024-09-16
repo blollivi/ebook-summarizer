@@ -64,7 +64,7 @@ class LLMEngine:
                 generation_config={"response_mime_type": "application/json"},
                 temperature=0,
                 safety_settings=safety_settings,
-            )
+            ),
         )
 
     def _reset_counters(self):
@@ -115,7 +115,10 @@ class LLMEngine:
         """
         self._check_limits()
         print(chain_args.keys())
+
+        # Call the LLM
         response = self.chain.invoke(chain_args)
+
         used_tokens = (
             response.usage_metadata["input_tokens"]
             + response.usage_metadata["output_tokens"]
@@ -124,6 +127,7 @@ class LLMEngine:
         self.call_count += 1
         print(f"Used {used_tokens} tokens. Total: {self.token_count}")
 
+        # Parse the output
         if parse_output:
             try:
                 return self.parser.parse(response.content)
