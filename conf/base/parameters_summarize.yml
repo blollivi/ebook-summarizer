@@ -1,5 +1,8 @@
-# This is a boilerplate parameters config generated for pipeline 'summarize'
-# using Kedro 0.19.6.
-#
-# Documentation for this file format can be found in "Parameters"
-# Link: https://docs.kedro.org/en/0.19.6/configuration/parameters.html
+tree_cut:
+  cut_thd: 0.97
+
+llm_engine:
+  token_limit_per_minute: 10000000
+  call_limit_per_minute: 15
+  google_model_name: gemini-1.5-pro
+  temperature: 0.1

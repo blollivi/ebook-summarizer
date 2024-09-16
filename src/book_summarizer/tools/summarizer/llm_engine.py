@@ -8,14 +8,13 @@ from langchain_google_genai._enums import (
     HarmCategory,
 )
 
-from .prompts import build_prompt_template
-
 safety_settings = {
     HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
     HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
     HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
     HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
 }
+
 
 class LLMEngine:
     """
@@ -25,7 +24,15 @@ class LLMEngine:
     managing token and call limits, and parsing the output into a structured format.
     """
 
-    def __init__(self, google_api_key: str, token_limit_per_minute=1e6, call_limit_per_minute=15):
+    def __init__(
+        self,
+        prompt_template: str,
+        google_api_key: str,
+        google_model_name: str,
+        temperature: float,
+        token_limit_per_minute: int,
+        call_limit_per_minute: int,
+    ):
         """
         Initialize the LLMEngine.
 
@@ -39,15 +46,15 @@ class LLMEngine:
         self.token_count = 0
         self.call_count = 0
         self.last_reset_time = time.time()
-        self.prompt = build_prompt_template(with_context=True)
+        self.prompt_template = prompt_template
         self.chat = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
+            model=google_model_name,
             google_api_key=google_api_key,
             generation_config={"response_mime_type": "application/json"},
-            temperature=0.2,
+            temperature=temperature,
             safety_settings=safety_settings,
         )
-        self.chain = self.prompt | self.chat
+        self.chain = self.prompt_template | self.chat
         self.parser = JsonOutputParser()
         self.retry_parser = RetryOutputParser.from_llm(
             parser=self.parser,
@@ -55,7 +62,8 @@ class LLMEngine:
                 model="gemini-1.5-flash",
                 google_api_key=google_api_key,
                 generation_config={"response_mime_type": "application/json"},
-                temperature=0.1,
+                temperature=0,
+                safety_settings=safety_settings,
             ),
         )
 
@@ -106,7 +114,11 @@ class LLMEngine:
             Exception: If parsing fails and cannot be recovered using the retry parser.
         """
         self._check_limits()
+        print(chain_args.keys())
+
+        # Call the LLM
         response = self.chain.invoke(chain_args)
+
         used_tokens = (
             response.usage_metadata["input_tokens"]
             + response.usage_metadata["output_tokens"]
@@ -115,12 +127,15 @@ class LLMEngine:
         self.call_count += 1
         print(f"Used {used_tokens} tokens. Total: {self.token_count}")
 
+        # Parse the output
         if parse_output:
             try:
                 return self.parser.parse(response.content)
             except Exception as e:
+                print(e)
+                prompt_value = self.prompt_template.format_prompt(**chain_args)
                 return self.retry_parser.parse_with_prompt(
-                    response.content, self.prompt
+                    response.content, prompt_value
                 )
         else:
             return response.content

@@ -15,19 +15,21 @@ from bokeh.layouts import column, row
 
 
 
-def create_hover_plot(umap_projection: pd.DataFrame, chunks_df: pd.DataFrame):
+def create_hover_plot(umap_projection: pd.DataFrame, chunks_df: pd.DataFrame, colors: np.array = None):
     x = umap_projection.iloc[:, 0].values
     y = umap_projection.iloc[:, 1].values
     texts = chunks_df["text"].values
-    values = np.arange(len(x))
+    if colors is  None:
+        colors = np.arange(len(x))
     sizes = chunks_df["Length"].values
-    
+
+
     # Create a colormap
     mapper = linear_cmap(
-        field_name="values",
+        field_name="colors",
         palette=Turbo256,
-        low=np.min(values),
-        high=np.max(values),
+        low=np.min(colors),
+        high=np.max(colors),
     )
 
     p = figure(
@@ -39,7 +41,7 @@ def create_hover_plot(umap_projection: pd.DataFrame, chunks_df: pd.DataFrame):
     output_file("hover_callback.html")
     sizes = ((sizes - np.min(sizes) + 1 ) / (np.max(sizes) - np.min(sizes)) + 0.01 ) * 0.1
     source = ColumnDataSource(
-        data=dict(x=x, y=y, text=texts, values=values, sizes=sizes)
+        data=dict(x=x, y=y, text=texts, colors=colors, sizes=sizes)
     )
     cr = p.circle(
         x="x",
@@ -75,7 +77,7 @@ def create_hover_plot(umap_projection: pd.DataFrame, chunks_df: pd.DataFrame):
     callback = CustomJS(args={"source": source, "div": div}, code=code)
 
     tooltips = [
-        ("Value", "@values"),
+        ("Value", "@colors"),
     ]
     p.add_tools(HoverTool(tooltips=tooltips, callback=callback, renderers=[cr]))
 

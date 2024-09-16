@@ -1,8 +1,10 @@
+from typing import Tuple
 import numpy as np
 import ruptures as rpt
 import networkx as nx
 from plotly import graph_objects as go
-from sklearn.metrics.pairwise import cosine_similarity
+
+from tqdm import tqdm
 
 
 def get_segments_from_breakpoints(bkpts: np.array):
@@ -21,44 +23,6 @@ def get_segments_from_breakpoints(bkpts: np.array):
     return segments
 
 
-def medoid(arr: np.array):
-    """
-    Calculate the medoid of a set of vectors.
-
-    The medoid is the point in the set with the smallest average distance to all other points.
-
-    Args:
-        arr (np.array): A 2D array of vectors.
-
-    Returns:
-        np.array: The medoid vector.
-    """
-    dist_matrix = cosine_similarity(arr)
-    idx_medoid = np.argmin(np.sum(dist_matrix, axis=1))
-    return arr[idx_medoid]
-
-
-def compute_centered_signal(signal: np.array, bkpts: np.array):
-    """
-    Center a signal based on the medoid of each segment defined by the breakpoints.
-
-    Args:
-        signal (np.array): The input signal.
-        bkpts (np.array): An array of breakpoint indices.
-
-    Returns:
-        np.array: The centered signal.
-    """
-    segments = get_segments_from_breakpoints(bkpts)
-    centered_signal = np.zeros_like(signal)
-
-    for seg in segments:
-        _signal = signal[seg[0] : seg[1] + 1]
-        center = medoid(_signal)
-        centered_signal[seg[0] : seg[1] + 1] = center
-    return centered_signal
-
-
 class SummaryTree:
     """
     A class to represent the hierarchical structure of a text using change point detection.
@@ -69,31 +33,17 @@ class SummaryTree:
     """
 
     def __init__(
-        self, penalties: np.array = np.arange(2, 50, 0.25), denoise: bool = True
+        self,
+        bkpts_matrix: np.array,
+        bkpts: list,
+        penalties: np.array,
     ):
-        """
-        Initialize the SummaryTree.
-
-        Args:
-            penalties (np.array, optional): An array of penalty values to use for change point detection.
-                Defaults to np.arange(2, 50, 0.25).
-            denoise (bool, optional): Whether to denoise the signal before change point detection.
-                Defaults to True.
-        """
+        self.bkpts_matrix = bkpts_matrix
+        self.bkpts = bkpts
         self.penalties = penalties
-        self.denoise = denoise
+        self._build_tree()
 
-    def fit(self, signal: np.array):
-        """
-        Fit the SummaryTree to the given signal.
-
-        Args:
-            signal (np.array): The input signal (e.g., embeddings of text chunks).
-
-        Returns:
-            SummaryTree: The fitted SummaryTree object.
-        """
-        self._find_change_points(signal)
+    def fit(self):
         self.graph = self._build_tree()
         return self
 
@@ -198,7 +148,7 @@ class SummaryTree:
             )
         return outline_path
 
-    def get_penalty_level_cut(self, penalty_level):
+    def get_penalty_level_cut(self, penalty_level) -> list:
         """
         Get the nodes in the summary tree at a specific penalty level.
 
@@ -216,6 +166,14 @@ class SummaryTree:
             if min_penalty <= penalty_level < max_penalty
         ]
 
+    def get_subtree_nodes_list(self, head: Tuple[int, int]):
+
+        descendants = nx.descendants(self.graph, head)
+        descendants.add(head)
+        sub_graph = self.graph.subgraph(descendants)
+
+        return list(sub_graph.nodes)
+
     def compute_node_level(self):
         """
         Compute the level of each node in the summary tree.
@@ -226,35 +184,6 @@ class SummaryTree:
             shortest_path = nx.shortest_path(self.graph, source=head)
             node_levels = {node: len(shortest_path[node]) - 1 for node in shortest_path}
             nx.set_node_attributes(self.graph, node_levels, "level")
-
-    def _find_change_points(self, signal: np.array) -> None:
-        """
-        Find change points in the given signal using the specified penalty values.
-
-        This method iterates through the penalty values, performing change point detection
-        at each level and optionally denoising the signal between levels.
-
-        Args:
-            signal (np.array): The input signal.
-        """
-        bkps = []
-        centered_signal = signal
-        for pen in self.penalties:
-            cost = rpt.costs.CostCosine()
-            model = rpt.Binseg(model="cosine").fit(centered_signal)
-            # model = rpt.KernelCPD(kernel="cosine", min_size=3).fit(centered_signal)
-            bkps.append(model.predict(pen=pen))
-
-            if self.denoise:
-                centered_signal = compute_centered_signal(centered_signal, bkps[-1])
-
-        bkpt_matrix = np.zeros((len(self.penalties), len(signal)))
-        for i, _bkps in enumerate(bkps):
-            for j in _bkps[:-1]:
-                bkpt_matrix[i, j - 1] = 1
-
-        self.bkpts = bkps
-        self.bkpts_matrix = bkpt_matrix
 
     def _build_tree(self) -> None:
         """
@@ -318,12 +247,12 @@ class SummaryTree:
                         G.add_edge(
                             segment,
                             prev_segment,
-                            label="summarized_from",
+                            label="parent_section",
                             weight=(min(end, prev_end) - max(start, prev_start))
                             / (end - start),
                         )
 
-        # Add order atrtibute to the last level
+        # Add order attribute to the last level
         for order, segment in enumerate(current_segments):
             nx.set_node_attributes(G, {segment: {"order": order}})
 
@@ -337,19 +266,22 @@ class SummaryTree:
 
         return G
 
-    def plot_graph(self, chunks_df, node_size=50):
+    def plot_graph(self, chunks_df, node_size=50, log_scale=False):
         """
-        Plot the summary tree using Plotly.
+        Plot the summary tree using Plotly with an option for log scale on the y-axis (penalties).
 
         Args:
             chunks_df (pd.DataFrame): Dataframe containing the text chunks.
-            node_size (int, optional): The size of the nodes in the plot. Defaults to 50.
+            node_size (int, optional): The base size of the nodes in the plot. Defaults to 50.
+            log_scale (bool, optional): Whether to use log scale for the y-axis. Defaults to False.
         """
         G = self.graph
+
+        # Apply log transformation to y-coordinates (penalties) if log_scale is True
         pos = {
             node: [
                 (G.nodes[node]["start"] + G.nodes[node]["end"]) / 2,
-                G.nodes[node]["pen"],
+                np.log1p(G.nodes[node]["pen"]) if log_scale else G.nodes[node]["pen"],
             ]
             for node in G.nodes
         }
@@ -365,7 +297,7 @@ class SummaryTree:
             node_x.append(x)
             node_y.append(y)
             node_text.append(f"{node}")
-            node_colors.append(G.nodes[node]["pen"])
+            node_colors.append(G.nodes[node]["pen"])  # Keep original penalty for color
             node_sizes.append(count_words_in_segment(node, chunks_df))
 
         node_sizes = np.sqrt(node_sizes / np.max(node_sizes)) * node_size
@@ -407,19 +339,122 @@ class SummaryTree:
             textposition="top center",
         )
 
-        fig = go.Figure(
-            data=edge_traces + [node_trace],
-            layout=go.Layout(
-                showlegend=False,
-                hovermode="closest",
-                margin=dict(b=20, l=5, r=5, t=40),
-                xaxis=dict(showgrid=False, zeroline=False),
-                yaxis=dict(showgrid=False, zeroline=False),
-                height=600,
-                width=1000,
+        layout = go.Layout(
+            showlegend=False,
+            hovermode="closest",
+            margin=dict(b=20, l=5, r=5, t=40),
+            xaxis=dict(showgrid=False, zeroline=False, title="Position in Text"),
+            yaxis=dict(
+                showgrid=False,
+                zeroline=False,
+                type=(
+                    "log" if log_scale else "linear"
+                ),  # Set y-axis scale based on log_scale argument
+                title="Log(Penalty)" if log_scale else "Penalty",
             ),
+            height=600,
+            width=1000,
         )
-        fig.show()
+
+        fig = go.Figure(data=edge_traces + [node_trace], layout=layout)
+        return fig
+
+    def plot_query_results(
+        self, query_results, chunks_df, node_size=50, log_scale=False
+    ):
+        G = self.graph
+
+        # Apply log transformation to y-coordinates (penalties) if log_scale is True
+        pos = {
+            node: [
+                (G.nodes[node]["start"] + G.nodes[node]["end"]) / 2,
+                np.log1p(G.nodes[node]["pen"]) if log_scale else G.nodes[node]["pen"],
+            ]
+            for node in G.nodes
+        }
+
+        node_x = []
+        node_y = []
+        node_text = []
+        node_colors = []
+        node_sizes = []
+
+        selected_nodes = query_results["ids"][0]
+        distances = query_results["distances"][0]
+
+        selected_nodes = [node.split("-") for node in selected_nodes]
+        selected_nodes = [(int(node[0]), int(node[1])) for node in selected_nodes]
+        
+        for node in G.nodes:
+            x, y = pos[node]
+            node_x.append(x)
+            node_y.append(y)
+            node_text.append(f"{node}")
+            if node in selected_nodes:
+                node_idx = selected_nodes.index(node)
+                node_colors.append(distances[node_idx])
+            else:
+                node_colors.append(1)
+            node_sizes.append(count_words_in_segment(node, chunks_df))
+
+        node_sizes = np.sqrt(node_sizes / np.max(node_sizes)) * node_size
+
+        edge_traces = []
+        for edge in G.edges:
+            x0, y0 = pos[edge[0]]
+            x1, y1 = pos[edge[1]]
+            edge_width = G.edges[edge]["weight"] * 3
+
+            edge_trace = go.Scatter(
+                x=[x0, x1, None],
+                y=[y0, y1, None],
+                line=dict(width=edge_width, color="rgba(0, 0, 0, 0.8)"),
+                hoverinfo="none",
+                mode="lines",
+            )
+            edge_traces.append(edge_trace)
+
+        node_trace = go.Scatter(
+            x=node_x,
+            y=node_y,
+            mode="markers+text",
+            text=node_text,
+            marker=dict(
+                showscale=True,
+                colorscale="Viridis_r",
+                color=node_colors,
+                size=node_sizes,
+                colorbar=dict(
+                    thickness=15,
+                    title="Penalty",
+                    xanchor="left",
+                    titleside="right",
+                ),
+                line_width=2,
+                opacity=1,
+            ),
+            textposition="top center",
+        )
+
+        layout = go.Layout(
+            showlegend=False,
+            hovermode="closest",
+            margin=dict(b=20, l=5, r=5, t=40),
+            xaxis=dict(showgrid=False, zeroline=False, title="Position in Text"),
+            yaxis=dict(
+                showgrid=False,
+                zeroline=False,
+                type=(
+                    "log" if log_scale else "linear"
+                ),  # Set y-axis scale based on log_scale argument
+                title="Log(Penalty)" if log_scale else "Penalty",
+            ),
+            height=600,
+            width=1000,
+        )
+
+        fig = go.Figure(data=edge_traces + [node_trace], layout=layout)
+        return fig
 
 
 def count_words_in_segment(segment, chunks_df):
