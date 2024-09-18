@@ -15,7 +15,7 @@ def register_pipelines() -> Dict[str, Pipeline]:
     """
     parse_ebook_pipeline = parse_ebook.create_pipeline()
     compute_embedding_pipeline = compute_embedding.create_pipeline()
-    summarize_pipeline = summarize.create_pipeline()
+    summarize_all_pipeline, summarize_tree_pipeline = summarize.create_pipelines()
 
     complete_pipeline = parse_ebook_pipeline + compute_embedding_pipeline
 
@@ -23,7 +23,8 @@ def register_pipelines() -> Dict[str, Pipeline]:
         "__default__": complete_pipeline,
         "parse_ebook": parse_ebook_pipeline,
         "compute_embedding": compute_embedding_pipeline,
-        "summarize": summarize_pipeline,
+        "summarize_all": summarize_all_pipeline,
+        "summarize_tree": summarize_tree_pipeline,
     }
 
     return pipelines
