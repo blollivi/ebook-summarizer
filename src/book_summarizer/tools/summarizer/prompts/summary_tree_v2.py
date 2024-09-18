@@ -21,7 +21,7 @@ SYSTEM_PROMPT = """<TASK DESCRIPTION>
 
     **Task Instructions**:
     For each section in the list, Identify the content of the section based on start and end chunk ids and, apply the followiong process:
-        - Write a 2-3 sentence summary of the section
+        - Write a 3-4 sentences summary of the section
         - Write a title
     Use the author's perspective, avoid third-person references.
     Minimize redundancy between parent and child summaries.
