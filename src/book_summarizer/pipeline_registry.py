@@ -4,7 +4,7 @@ from typing import Dict
 
 from kedro.pipeline import Pipeline
 
-from book_summarizer.pipelines import parse_ebook, compute_embedding, summarize
+from book_summarizer.pipelines import parse_ebook, compute_embedding, summarize, populate_database
 
 
 def register_pipelines() -> Dict[str, Pipeline]:
@@ -16,6 +16,7 @@ def register_pipelines() -> Dict[str, Pipeline]:
     parse_ebook_pipeline = parse_ebook.create_pipeline()
     compute_embedding_pipeline = compute_embedding.create_pipeline()
     summarize_all_pipeline, summarize_tree_pipeline = summarize.create_pipelines()
+    populate_database_pipeline = populate_database.create_pipeline()
 
     complete_pipeline = parse_ebook_pipeline + compute_embedding_pipeline
 
@@ -25,6 +26,7 @@ def register_pipelines() -> Dict[str, Pipeline]:
         "compute_embedding": compute_embedding_pipeline,
         "summarize_all": summarize_all_pipeline,
         "summarize_tree": summarize_tree_pipeline,
+        "populate_database": populate_database_pipeline,
     }
 
     return pipelines
