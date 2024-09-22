@@ -1,9 +1,7 @@
 epub_content:
   type: book_summarizer.datasets.epub_dataset.EPUBDataSet
   # filepath: /home/blollivier/Dropbox/Bibliothèque calibre/Juliet Schor/Plenitude_ The New Economics of True Wealth (95)/Plenitude_ The New Economics of True Wealt - Juliet Schor.epub
-  filepath: /home/blollivier/Dropbox/Bibliothèque calibre/Yuval Noah Harari/Homo
-    deus_ Une breve histoire du futur (38)/Homo deus_ Une breve histoire du
-    futur - Yuval Noah Harari.epub
+  filepath: /home/blollivier/Dropbox/Bibliothèque calibre/Philippe Descola/Par-dela nature et culture (197)/Par-dela nature et culture - Philippe Descola.epub
 
 chunks:
   type: pandas.ParquetDataset
