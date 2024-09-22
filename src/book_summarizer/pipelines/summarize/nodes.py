@@ -88,6 +88,8 @@ def summarize_all(
     for head in tree_cut:
         head_str = "-".join([str(i) for i in head])
         print(f"Summarizing tree for head: {head_str}")
+        # Convert head to tuple
+        head = tuple(head)
         output = summarizer.summarize_subtree(head)
         try:
             hierarchical_summary[head_str] = summarizer.check_output(output, head)
@@ -116,3 +118,32 @@ def write_global_summary(hierarchical_summary: dict, llm_engine_params: dict):
             language="English",
         )
     )
+
+
+def summarize_tree(
+    head_str: str,
+    summary_tree: SummaryTree,
+    chunks_df: pd.DataFrame,
+    llm_engine_params: dict,
+):
+    prompt_template = build_summary_tree_prompt_template()
+    llm_engine = LLMEngine(
+        prompt_template=prompt_template,
+        google_api_key=credentials["google_api_key"],
+        **llm_engine_params,
+    )
+
+    summarizer = Summarizer(summary_tree, llm_engine, chunks_df)
+
+    hierarchical_summary = {}
+    print(f"Summarizing tree for head: {head_str}")
+    # Convert head_str to tuple
+    head = tuple(map(int, head_str.split("-")))
+    output = summarizer.summarize_subtree(head)
+    try:
+        hierarchical_summary[head_str] = summarizer.check_output(output, head)
+    except Exception as e:
+        print(f"Output Check Error: {e}")
+        hierarchical_summary[head_str] = output
+
+    return hierarchical_summary

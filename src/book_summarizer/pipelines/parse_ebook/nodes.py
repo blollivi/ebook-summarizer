@@ -47,7 +47,7 @@ def _infer_paragraph_level(nb_words: List[int]) -> int:
     return 1
 
 
-def infer_paragraph_levels(ebook_content: List[str]) -> pd.DataFrame:
+def infer_paragraph_levels(epub_content: List[str]) -> pd.DataFrame:
     """
     Loop over all the xhtml content. For each xhtml file, explore the tree structure
     in order to infer which tag levels are likely to represent paragraphs.
@@ -55,7 +55,7 @@ def infer_paragraph_levels(ebook_content: List[str]) -> pd.DataFrame:
 
     paragraph_levels = []
 
-    for content in ebook_content:
+    for content in epub_content:
         soup = BeautifulSoup(content, "html.parser")
         body_tag = soup.find("body")
         level_stats = _explore_tree(body_tag)
@@ -84,14 +84,14 @@ def _extract_chunks(tag, paragraph_level, chunks=None, level=0):
     return chunks
 
 
-def extract_chunks(ebook_content: List[str], paragraph_levels: List[int]) -> List[str]:
+def extract_chunks(epub_content: List[str], paragraph_levels: List[int]) -> List[str]:
     """
     Extract chunks of text from the xhtml content based on the inferred paragraph levels.
     Each chunk corresponds to the text contained in tags at the inferred paragraph level.
 
     Parameters:
     ----------
-    ebook_content: List[str]
+    epub_content: List[str]
         List of xhtml content.
     paragraph_levels: List[int]
         List of inferred paragraph levels.
@@ -111,7 +111,7 @@ def extract_chunks(ebook_content: List[str], paragraph_levels: List[int]) -> Lis
     ["Paragraph 1 Paragraph 2", "Paragraph 3"]
     """
     chapters = []
-    for content, level in zip(ebook_content, paragraph_levels):
+    for content, level in zip(epub_content, paragraph_levels):
         soup = BeautifulSoup(content, "html.parser")
         body_tag = soup.find("body")
         # Find all tags at the given level in the tree
@@ -126,6 +126,8 @@ def extract_chunks(ebook_content: List[str], paragraph_levels: List[int]) -> Lis
             for j, chunk in enumerate(chapter)
         ]
     )
+
+    chunks_df["Length"] = chunks_df["text"].apply(lambda x: len(x.split(" ")))
 
     return chunks_df
 

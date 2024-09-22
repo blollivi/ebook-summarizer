@@ -14,13 +14,13 @@ def create_pipeline(**kwargs) -> Pipeline:
         [
             node(
                 func=infer_paragraph_levels,
-                inputs="ebook_content",
+                inputs="epub_content",
                 outputs="paragraph_levels",
                 name="infer_paragraph_levels",
             ),
             node(
                 func=extract_chunks,
-                inputs=["ebook_content", "paragraph_levels"],
+                inputs=["epub_content", "paragraph_levels"],
                 outputs="raw_chunks",
                 name="extract_chunks",
             ),
