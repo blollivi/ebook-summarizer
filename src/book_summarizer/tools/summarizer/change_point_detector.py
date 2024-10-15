@@ -3,6 +3,7 @@ import ruptures as rpt
 from tqdm import tqdm
 from sklearn.metrics.pairwise import cosine_similarity
 
+from .summary_tree import get_segments_from_breakpoints
 
 class ChangePointDetector:
     def __init__(
