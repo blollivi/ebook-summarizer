@@ -8,20 +8,12 @@ class EPUBDataSet(AbstractDataset):
     def __init__(self, filepath: str):
         self._filepath = filepath
 
-    def _load(self) -> List[str]:
+    def _load(self) -> epub.EpubBook:
         if not os.path.exists(self._filepath):
             raise DatasetError(f"Filepath {self._filepath} does not exist.")
 
         book = epub.read_epub(self._filepath)
-        item_ids = [s[0] for s in book.spine]
-        xhtml_content = []
-
-        for item_id in item_ids:
-            if item_id != "titlepage":
-                item = book.get_item_with_id(item_id)
-                xhtml_content.append(item.get_content().decode("utf-8"))
-
-        return xhtml_content
+        return book
 
     def _save(self, data: Any) -> None:
         raise DatasetError("Saving data is not supported for EPUBDataSet")
