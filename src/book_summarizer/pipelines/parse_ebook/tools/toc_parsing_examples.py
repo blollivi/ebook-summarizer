@@ -1,3 +1,10 @@
-from .chain import build_llm_chain
-
-
+EXAMPLES = [
+    {
+        "input": "",
+        "output": ""
+    },
+    {
+        "input": "",
+        "output": ""
+    },
+]
