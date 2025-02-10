@@ -1,18 +1,31 @@
 from typing import List, Union, Tuple
 from bs4 import BeautifulSoup
 import pandas as pd
+import numpy as np
 from ebooklib import epub
 from pathlib import Path
 import urllib.parse
 from tqdm import tqdm
 from sklearn.covariance import EllipticEnvelope
 import ebooklib
+import concurrent.futures
 
 from .tools.chain import build_llm_chain
 
 
 # Define the main tags we care about.
-MAIN_TAGS = {"h1", "h2", "h3", "h4", "h5", "h6", "div", "p"}
+MAIN_TAGS = {
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "div",
+    "p",
+    "span",
+    "a",
+}
 
 
 def list_epub_files_from_directory(directory: str) -> List[Path]:
@@ -78,7 +91,7 @@ def is_leaf_tag(tag) -> bool:
     Returns True if the given tag does not contain any descendant that is one of the main tags.
     """
     # If any descendant (at any level) has a tag name in MAIN_TAGS, then tag is not a leaf.
-    return tag.find(lambda child: child is not tag and child.name in MAIN_TAGS) is None
+    return tag.find(lambda child: child is not tag and child.name in MAIN_TAGS and len(child.content) > 0) is None
 
 
 def extract_main_tags(html_str) -> pd.DataFrame:
@@ -112,7 +125,7 @@ def extract_main_tags(html_str) -> pd.DataFrame:
     return pd.DataFrame(tags)
 
 
-def compute_tags_stats(items: List[epub.EpubHtml]) -> pd.DataFrame:
+def compute_tags_stats(tags_df: pd.DataFrame) -> pd.DataFrame:
     """
     Compute various tag statistics aggregated over the book items.
     Also compute two new features:
@@ -120,104 +133,37 @@ def compute_tags_stats(items: List[epub.EpubHtml]) -> pd.DataFrame:
       - section_proportion: proportion of items where the tag/class combination is found.
     """
 
-    # To accumulate tag information per item.
-    per_item_stats = []
-    # To accumulate raw tag rows from every item to compute overall stats.
-    all_tags = []
-
-    for section_idx, item in enumerate(items):
-        # Extract the HTML content from the item.
-        content = item.content
-        # Use the shared helper to extract main tags from the HTML.
-        tags_df = extract_main_tags(str(content))
-        if tags_df.empty:
-            continue
-
-        # Annotate with section id.
-        tags_df = tags_df.copy()
-        tags_df["section"] = section_idx
-        all_tags.append(tags_df)
-
-        # For this section, compute raw group stats (used later for consecutive groups if needed).
-        # Group consecutive tags within the section so as to calculate group lengths.
-        df = tags_df.copy()
-        df["group_change"] = (df["tag"].ne(df["tag"].shift())) | (df["class"].ne(df["class"].shift()))
-        df["group_id"] = df["group_change"].cumsum()
-        # Compute average consecutive group length for each tag/class in this section.
-        group_stats = df.groupby("group_id").agg(
-            tag=("tag", "first"),
-            clas=("class", "first"),
-            group_length=("tag", "count")
-        ).reset_index(drop=True)
-        group_stats = group_stats.rename(columns={"clas": "class"})
-        avg_consecutive = (
-            group_stats.groupby(["tag", "class"])["group_length"]
-            .mean()
-            .reset_index()
-            .rename(columns={"group_length": "av_consecutive_length"})
-        )
-        # Compute per section counts and text stats.
-        section_counts = (
-            tags_df.groupby(["tag", "class"])
-            .agg(
-                count=("tag", "count"),
-                total_length=("text_length", "sum"),
-                avg_length=("text_length", "mean"),
-                last_decile_length=("text_length", lambda x: x.quantile(0.9)),
-            )
-            .reset_index()
-        )
-        section_counts["section"] = section_idx
-        # Merge the average consecutive group length computed for this section.
-        section_counts = section_counts.merge(avg_consecutive, on=["tag", "class"], how="left")
-        per_item_stats.append(section_counts)
-
-    if not all_tags:
-        return pd.DataFrame()
-
-    # Combine all raw tag rows from all items.
-    overall_tags_df = pd.concat(all_tags, ignore_index=True)
-    overall_stats = (
-        overall_tags_df.groupby(["tag", "class"])
-        .agg(
-            count=("tag", "count"),
-            total_length=("text_length", "sum"),
-            avg_length=("text_length", "mean"),
-            last_decile_length=("text_length", lambda x: x.quantile(0.9)),
-        )
-        .reset_index()
+    stats = tags_df.groupby(["tag", "class"]).agg(
+        count=("text", "count"),
+        total_length=("text_length", "sum"),
+        avg_length=("text_length", "mean"),
     )
 
-    # Compute coverage and proportion based on overall counts.
-    overall_stats["coverage"] = overall_stats["total_length"] / overall_stats["total_length"].sum()
-    overall_stats["proportion"] = overall_stats["count"] / overall_stats["count"].sum()
+    stats["proportion"] = stats["count"] / tags_df.shape[0]
+    stats["coverage"] = stats["total_length"] / tags_df["text_length"].sum()
 
-    # Combine per-section statistics to compute avg_nb_section and section_proportion.
-    per_item_df = pd.concat(per_item_stats, ignore_index=True)
-    # Calculate average occurrences per item (only over sections where the tag appears).
-    avg_nb_section = (
-        per_item_df.groupby(["tag", "class"])["count"].mean().reset_index().rename(columns={"count": "avg_nb_section"})
-    )
-    # Calculate the number of sections where each tag/class combination appears.
-    sections_presence = (
-        per_item_df.groupby(["tag", "class"])["section"].nunique().reset_index().rename(columns={"section": "sections_found"})
-    )
-    av_consecutive_length = (
-        per_item_df.groupby(["tag", "class"])["av_consecutive_length"]
-        .mean()
-        .reset_index()
-    )
-    # Total number of items.
-    total_sections = len(items)
-    sections_presence["section_proportion"] = sections_presence["sections_found"] / total_sections
-    sections_presence = sections_presence.drop(columns="sections_found")
+    return stats
 
-    # Merge new features into the overall stats.
-    overall_stats = overall_stats.merge(avg_nb_section, on=["tag", "class"], how="left")
-    overall_stats = overall_stats.merge(sections_presence, on=["tag", "class"], how="left")
-    overall_stats = overall_stats.merge(av_consecutive_length, on=["tag", "class"], how="left")
+def extract_toc(book: epub.EpubBook) -> str:
+    toc = book.toc
 
-    return overall_stats
+    def process_toc_item(item, indent=0):
+        toc_str = ""
+        if isinstance(item, tuple):
+            toc_str += f"{'  ' * indent}{item[0].title} - {item[0].href}\n"
+            for sub_item in item[1]:
+                toc_str += process_toc_item(sub_item, indent + 1)
+        else:
+            toc_str += f"{'  ' * indent}{item.title} - {item.href}\n"
+        return toc_str
+
+    toc_string = ""
+    for item in toc:
+        toc_string += process_toc_item(item)
+    
+    return toc_string
+
+
 
 
 def compute_tags_stats_all(directory: str) -> pd.DataFrame:
@@ -226,11 +172,18 @@ def compute_tags_stats_all(directory: str) -> pd.DataFrame:
     for epub_file in tqdm(list_epub_files):
         try:
             book = epub.read_epub(epub_file, options={"ignore_ncx": True})
-            # items = get_items_from_book(book)
+# items = get_items_from_book(book)
             items = [item for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT)]
-            # body = concatenate_items_body(items)
-            # tags_df = extract_main_tags(body)
-            stats = compute_tags_stats(items)
+            body = concatenate_items_body(items)
+            tags_df = extract_main_tags(body)
+            # Concat the string content of "tag" and "class" columns to get a unique identifier for each tag.
+            tags_df["tag_class"] = tags_df["tag"] + "_" + tags_df["class"]            
+            ohe = pd.get_dummies(tags_df["tag_class"])
+
+            # Multiply the one-hot-encoded tags by the text length to get the total length of each tag.
+            ohe = ohe.mul(tags_df["text_length"].clip(0, 1000), axis=0)
+
+            stats = compute_tags_stats(tags_df)
             stats["book"] = epub_file.stem
             tags_stats.append(stats)
         except Exception as e:
@@ -238,16 +191,24 @@ def compute_tags_stats_all(directory: str) -> pd.DataFrame:
 
     return pd.concat(tags_stats, ignore_index=True)
 
-
 def plot_stats(stats):
     from plotly import express as px
 
     fig = px.scatter_matrix(
         stats,
-        dimensions=["proportion", "coverage",  "avg_nb_section", "count", "section_proportion"],
+        dimensions=["proportion", "coverage", "count", "avg_length"],
         color="tag",
-        hover_data=["book", "class"],
+        hover_data=["class", "book"],
     )
+    fig.show()
+
+    fig = px.strip(
+        stats,
+        y="total_length",
+        x="count",
+        hover_data=["class"],
+    )
+
     fig.show()
 
 
@@ -273,16 +234,3 @@ def build_book_from_chunks(chunks: List[List[str]]) -> str:
     with open("book.txt", "w") as f:
         f.write(book)
     return book
-
-
-def fit_content_classifier(stats: pd.DataFrame):
-    header_tags = ["h1", "h2", "h3", "h4", "h5", "h6"]
-    stats["is_header"] = stats["tag"].isin(header_tags)
-    
-    feature_cols = ["avg_length", "coverage", "last_decile_length", "count", "proportion", "av_consecutive_length"]
-    X = stats.loc[stats["is_header"], feature_cols].dropna().values
-    
-    clf = EllipticEnvelope(contamination=0.5)
-    clf.fit(X)
-    
-    stats["is_header_pred"] = clf.predict(stats[feature_cols].fillna(0).values).astype(str)
